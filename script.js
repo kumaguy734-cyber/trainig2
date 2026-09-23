@@ -160,13 +160,15 @@ $('timeChip').addEventListener('click', () => {
    タブ切り替え
    ========================================================= */
 
+const TAB_SCREENS = { library: 'screen-library', builder: 'screen-builder', history: 'screen-history' };
+
 document.querySelectorAll('.tab-btn').forEach((tab) => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach((t) => { t.classList.remove('is-active'); t.setAttribute('aria-selected', 'false'); });
     tab.classList.add('is-active');
     tab.setAttribute('aria-selected', 'true');
-    const target = tab.dataset.tab === 'library' ? 'screen-library' : 'screen-builder';
-    showScreen(target);
+    showScreen(TAB_SCREENS[tab.dataset.tab]);
+    if (tab.dataset.tab === 'history') renderHistoryView();
   });
 });
 
@@ -315,10 +317,125 @@ $('soundToggle').addEventListener('click', () => {
 });
 
 /* =========================================================
+   記録（localStorageへの保存と分析表示）
+   ========================================================= */
+
+const HISTORY_KEY = 'coreRunHistory';
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveHistory(list) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-300)));
+  } catch (e) { /* storage unavailable — ignore */ }
+}
+
+function addHistoryRecord(record) {
+  const list = loadHistory();
+  list.push(record);
+  saveHistory(list);
+}
+
+function renderHistoryView() {
+  const list = loadHistory().sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  $('historyEmpty').hidden = list.length !== 0;
+  $('historyStats').style.display = list.length ? 'flex' : 'none';
+
+  renderHistoryStats(list);
+  renderWeekChart(list);
+  renderThemeChart(list);
+  renderHistoryList(list);
+}
+
+function renderHistoryStats(list) {
+  const totalSessions = list.length;
+  const totalMinutes = list.reduce((s, r) => s + r.actualMinutes, 0);
+  const avgMinutes = totalSessions ? Math.round((totalMinutes / totalSessions) * 10) / 10 : 0;
+
+  $('historyStats').innerHTML = `
+    <div class="stat-card"><p class="stat-num">${totalSessions}</p><p class="stat-label">総トレーニング回数</p></div>
+    <div class="stat-card"><p class="stat-num">${Math.round(totalMinutes)}</p><p class="stat-label">総トレーニング時間（分）</p></div>
+    <div class="stat-card"><p class="stat-num">${avgMinutes}</p><p class="stat-label">平均時間（分/回）</p></div>
+  `;
+}
+
+function renderWeekChart(list) {
+  const days = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  const minutesByDay = days.map((d) => {
+    const key = d.toDateString();
+    return list.filter((r) => new Date(r.date).toDateString() === key).reduce((s, r) => s + r.actualMinutes, 0);
+  });
+  const max = Math.max(1, ...minutesByDay);
+  const weekday = ['日', '月', '火', '水', '木', '金', '土'];
+
+  $('weekChart').innerHTML = days.map((d, i) => `
+    <div class="bar-col">
+      <span class="bar-col-val">${minutesByDay[i] ? Math.round(minutesByDay[i]) : ''}</span>
+      <div class="bar-col-fill" style="height:${Math.round((minutesByDay[i] / max) * 100)}%"></div>
+      <span class="bar-col-label">${weekday[d.getDay()]}</span>
+    </div>
+  `).join('');
+}
+
+function renderThemeChart(list) {
+  const counts = THEMES.map((t) => ({ theme: t, count: list.filter((r) => r.themeKey === t.key).length }));
+  const max = Math.max(1, ...counts.map((c) => c.count));
+
+  $('themeChart').innerHTML = counts.map((c) => `
+    <div class="hbar-row">
+      <span class="hbar-label">${c.theme.emoji} ${c.theme.title.slice(0, 8)}</span>
+      <span class="hbar-track"><span class="hbar-fill" style="width:${Math.round((c.count / max) * 100)}%"></span></span>
+      <span class="hbar-val">${c.count}</span>
+    </div>
+  `).join('');
+}
+
+function renderHistoryList(list) {
+  $('historyList').innerHTML = list.map((r) => {
+    const d = new Date(r.date);
+    const dateLabel = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const statusClass = r.completed ? 'done' : 'partial';
+    const statusLabel = r.completed ? '完了' : `途中（${r.exercisesDone}/${r.totalExercises}種目）`;
+    return `
+      <div class="history-row">
+        <span class="history-row-icon">${r.themeEmoji}</span>
+        <span class="history-row-body">
+          <span class="history-row-title">${r.themeTitle}</span>
+          <span class="history-row-meta">${dateLabel} ・ ${r.levelTitle} ・ 約${r.actualMinutes}分</span>
+        </span>
+        <span class="history-row-status ${statusClass}">${statusLabel}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+$('clearHistoryBtn').addEventListener('click', () => {
+  if (!loadHistory().length) return;
+  const ok = window.confirm('すべてのトレーニング記録を削除します。よろしいですか？');
+  if (!ok) return;
+  saveHistory([]);
+  renderHistoryView();
+});
+
+/* =========================================================
    ワークアウト実行モード
    ========================================================= */
 
-const workout = { steps: [], idx: 0, intervalId: null, remainingMs: 0, totalMs: 0, running: false };
+const workout = { steps: [], idx: 0, intervalId: null, menu: null, startTime: 0 };
 
 function buildSteps(menu) {
   const steps = [];
@@ -341,16 +458,49 @@ $('startWorkoutBtn').addEventListener('click', () => {
   ensureAudio();
   workout.steps = buildSteps(state.currentMenu);
   workout.idx = 0;
+  workout.menu = state.currentMenu;
+  workout.startTime = Date.now();
   $('workoutOverlay').hidden = false;
   renderStep();
 });
 
-$('exitWorkout').addEventListener('click', stopWorkout);
+$('exitWorkout').addEventListener('click', () => {
+  const step = workout.steps[workout.idx];
+  if (step && step.kind !== 'done' && workout.menu) {
+    const ok = window.confirm('トレーニングを終了しますか？ここまでの記録を保存します。');
+    if (!ok) return;
+    recordSession(false);
+  }
+  stopWorkout();
+});
 
 function stopWorkout() {
   clearInterval(workout.intervalId);
-  workout.running = false;
   $('workoutOverlay').hidden = true;
+}
+
+function recordSession(completed) {
+  const menu = workout.menu;
+  if (!menu) return;
+  const step = workout.steps[workout.idx];
+  const totalEx = menu.exercises.length;
+  const exercisesDone = completed ? totalEx : Math.min(totalEx, (step && typeof step.exIdx === 'number') ? step.exIdx : 0);
+  const elapsedMin = Math.max(0.1, (Date.now() - workout.startTime) / 60000);
+
+  addHistoryRecord({
+    id: Date.now(),
+    date: new Date().toISOString(),
+    themeKey: menu.theme.key,
+    themeTitle: menu.theme.title,
+    themeEmoji: menu.theme.emoji,
+    levelTitle: menu.level.title,
+    durationLabel: menu.duration.title,
+    totalExercises: totalEx,
+    exercisesDone,
+    estMinutes: menu.estMinutes,
+    actualMinutes: Math.round(elapsedMin * 10) / 10,
+    completed,
+  });
 }
 
 function updateProgressBar() {
@@ -371,11 +521,14 @@ function renderStep() {
   clearInterval(workout.intervalId);
   const step = workout.steps[workout.idx];
   const body = $('workoutBody');
+  const footer = $('workoutFooter');
+  footer.innerHTML = '';
   updateProgressBar();
 
   if (step.kind === 'exercise') {
     const ex = step.ex;
     if (ex.type === 'time') {
+      // 時間計測種目：自動カウントダウン。フッターにはボタンを置かず、自動で次へ進む
       body.innerHTML = `
         <p class="wk-phase-label">EXERCISE</p>
         <h2 class="wk-name">${ex.star ? '⭐ ' : ''}${ex.name}</h2>
@@ -392,14 +545,15 @@ function renderStep() {
       runTimer(ex.timeSec, () => { sfxFinish(); nextStep(); });
       sfxStart();
     } else {
+      // 回数計測種目：フッターに常に押せる「完了して次へ」ボタンを固定表示
       body.innerHTML = `
         <p class="wk-phase-label">EXERCISE</p>
         <h2 class="wk-name">${ex.star ? '⭐ ' : ''}${ex.name}</h2>
         <p class="wk-set">セット ${step.setIdx} / ${step.totalSets}</p>
         <p class="wk-reps-num">${ex.repsLabel}</p>
         <p class="wk-form-hint">${ex.form}</p>
-        <button class="wk-action-btn" id="repsDoneBtn">完了して次へ</button>
       `;
+      footer.innerHTML = `<button class="wk-action-btn" id="repsDoneBtn">完了して次へ</button>`;
       $('repsDoneBtn').addEventListener('click', () => { sfxFinish(); nextStep(); });
       sfxStart();
     }
@@ -416,17 +570,18 @@ function renderStep() {
         <div class="wk-ring-num" id="ringNum">${step.restSec}</div>
       </div>
       <p class="wk-form-hint">${nextLine}</p>
-      <button class="wk-skip-btn" id="skipRestBtn">スキップ →</button>
     `;
+    footer.innerHTML = `<button class="wk-skip-btn" id="skipRestBtn">スキップ →</button>`;
     $('skipRestBtn').addEventListener('click', () => { clearInterval(workout.intervalId); nextStep(); });
     runTimer(step.restSec, () => { sfxStart(); nextStep(); });
   } else {
+    recordSession(true);
     body.innerHTML = `
       <div class="wk-done-emoji">🎉</div>
       <p class="wk-done-title">お疲れ様でした！</p>
-      <p class="wk-done-sub">メニューを完了しました。この調子でトレーニングを続けましょう。</p>
-      <button class="wk-action-btn" id="finishBtn">閉じる</button>
+      <p class="wk-done-sub">メニューを完了しました。記録は「記録」タブから確認できます。</p>
     `;
+    footer.innerHTML = `<button class="wk-action-btn" id="finishBtn">閉じる</button>`;
     sfxComplete();
     $('finishBtn').addEventListener('click', stopWorkout);
   }

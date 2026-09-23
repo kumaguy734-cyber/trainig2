@@ -26,6 +26,7 @@
     <nav class="tabs" role="tablist" aria-label="表示モード切替">
       <button class="tab-btn is-active" data-tab="library" role="tab" aria-selected="true">種目図鑑</button>
       <button class="tab-btn" data-tab="builder" role="tab" aria-selected="false">メニュー提案</button>
+      <button class="tab-btn" data-tab="history" role="tab" aria-selected="false">記録</button>
     </nav>
   </header>
 
@@ -95,6 +96,29 @@
       <button class="primary-btn start-btn" id="startWorkoutBtn">このメニューを開始する（タイマーモードへ）</button>
     </section>
 
+    <!-- ===== SCREEN 4: 記録・分析 ===== -->
+    <section id="screen-history" class="screen" aria-label="トレーニング記録">
+
+      <div class="stat-row" id="historyStats"></div>
+
+      <div class="chart-card">
+        <p class="step-label">直近7日間のトレーニング時間（分）</p>
+        <div class="bar-chart" id="weekChart"></div>
+      </div>
+
+      <div class="chart-card">
+        <p class="step-label">テーマ別の実施回数</p>
+        <div class="hbar-chart" id="themeChart"></div>
+      </div>
+
+      <div class="history-list-head">
+        <p class="step-label">記録一覧</p>
+        <button class="text-btn" id="clearHistoryBtn">記録をすべて削除</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+      <p class="empty-state" id="historyEmpty" hidden>まだ記録がありません。メニューを実行すると、ここに記録されます。</p>
+    </section>
+
   </main>
 
   <!-- ===== 種目詳細モーダル ===== -->
@@ -125,7 +149,11 @@
       </div>
 
       <div class="workout-body" id="workoutBody">
-        <!-- phase: exercise / rest / done rendered here -->
+        <!-- phase: exercise / rest / done rendered here (scrollable) -->
+      </div>
+
+      <div class="workout-footer" id="workoutFooter">
+        <!-- action button for the current step, always reachable -->
       </div>
 
     </div>
