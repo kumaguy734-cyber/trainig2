@@ -32,11 +32,11 @@ const EXERCISES = [
     form: '肘とつま先で体を支え、頭からかかとまで一直線に保ちます。お尻が上がったり腰が落ちたりしないよう、お腹とお尻に力を入れて姿勢をキープしましょう。' },
   { id: 3,  name: 'シングルレッグ グルート ブリッジ', star: true,  type: 'reps', repsLabel: '左右各20回', sets: 3, category: '股関節・臀部', themes: ['hip'],                        icon: '🌉',
     form: '仰向けで片膝を立て、もう片方の脚を伸ばします。立てた脚のかかとで床を押し、お尻を持ち上げましょう。骨盤が傾かないよう左右の高さを揃えたまま上げ下げします。' },
-  { id: 4,  name: 'ダイアゴナル',                  star: false, type: 'time', timeSec: 30,             sets: 3, category: '体幹安定',   themes: ['running', 'posture'],         icon: '✈️',
+  { id: 4,  name: 'ダイアゴナル',                  star: false, type: 'time', timeSec: 30, sides: true, sets: 3, category: '体幹安定',   themes: ['running', 'posture'],         icon: '✈️',
     form: '四つ這いから対角線上の手足（右手と左脚など）を同時にまっすぐ伸ばします。体幹を使ってバランスを取り、骨盤が左右に傾かないようキープしましょう。' },
   { id: 5,  name: 'スパイダープランク',            star: false, type: 'reps', repsLabel: '左右10回',   sets: 3, category: '腹筋',       themes: ['abs', 'running'],             icon: '🕷️',
     form: 'プランク姿勢から片膝を同じ側の肘に近づけるように引きつけます。腰の高さを一定に保ち、体幹を安定させたまま左右交互に行いましょう。' },
-  { id: 6,  name: 'サイドプランク',                star: true,  type: 'time', timeSec: 20,             sets: 3, category: '体幹安定',   themes: ['running', 'abs'],             icon: '📐',
+  { id: 6,  name: 'サイドプランク',                star: true,  type: 'time', timeSec: 20, sides: true, sets: 3, category: '体幹安定',   themes: ['running', 'abs'],             icon: '📐',
     form: '横向きに寝て肘と足の側面で体を支え、体を一直線に持ち上げます。腰が落ちないよう体幹全体に力を入れて姿勢を維持しましょう。' },
   { id: 7,  name: 'Vシットアップ',                 star: false, type: 'reps', repsLabel: '10回',      sets: 3, category: '腹筋',       themes: ['abs'],                        icon: '🔺',
     form: '仰向けから上体と両脚を同時に持ち上げ、体をV字にして手と足先を近づけます。反動を使わず腹筋の力でコントロールしながら行いましょう。' },
@@ -73,7 +73,8 @@ const EXERCISES = [
 const $ = (id) => document.getElementById(id);
 
 function specText(ex) {
-  const base = ex.type === 'time' ? `${ex.timeSec}秒` : ex.repsLabel;
+  let base = ex.type === 'time' ? `${ex.timeSec}秒` : ex.repsLabel;
+  if (ex.type === 'time' && ex.sides) base = `左右各${ex.timeSec}秒`;
   return `${base} × ${ex.sets}set`;
 }
 
@@ -441,7 +442,13 @@ function buildSteps(menu) {
   const steps = [];
   menu.exercises.forEach((ex, exIdx) => {
     for (let s = 1; s <= ex.sets; s++) {
-      steps.push({ kind: 'exercise', ex, exIdx, setIdx: s, totalSets: ex.sets, totalEx: menu.exercises.length });
+      if (ex.type === 'time' && ex.sides) {
+        // 左右交互の種目：1セットの中で右→左の2フェーズをタイマーで案内する
+        steps.push({ kind: 'exercise', ex, exIdx, setIdx: s, totalSets: ex.sets, totalEx: menu.exercises.length, side: 'right' });
+        steps.push({ kind: 'exercise', ex, exIdx, setIdx: s, totalSets: ex.sets, totalEx: menu.exercises.length, side: 'left' });
+      } else {
+        steps.push({ kind: 'exercise', ex, exIdx, setIdx: s, totalSets: ex.sets, totalEx: menu.exercises.length });
+      }
       if (s < ex.sets) {
         steps.push({ kind: 'rest', restSec: menu.level.restSet, label: 'セット間の休憩', exIdx, totalEx: menu.exercises.length });
       }
@@ -556,10 +563,14 @@ function renderStep() {
     const ex = step.ex;
     if (ex.type === 'time') {
       // 時間計測種目：自動カウントダウン。フッターにはボタンを置かず、自動で次へ進む
+      const sideBadge = step.side
+        ? `<p class="wk-side-badge">${step.side === 'right' ? '👉 右側から' : '👈 左側'}</p>`
+        : '';
       body.innerHTML = `
         <p class="wk-phase-label">EXERCISE</p>
         <h2 class="wk-name">${ex.star ? '⭐ ' : ''}${ex.name}</h2>
         <p class="wk-set">セット ${step.setIdx} / ${step.totalSets}</p>
+        ${sideBadge}
         <div class="wk-ring-wrap" id="ringWrap">
           <svg viewBox="0 0 240 240">
             <circle class="wk-ring-bg" cx="120" cy="120" r="100"></circle>
@@ -569,7 +580,8 @@ function renderStep() {
         </div>
         <p class="wk-form-hint">${ex.form}</p>
       `;
-      runTimer(ex.timeSec, () => { sfxFinish(); nextStep(); });
+      const isSwitchingSide = step.side === 'right';
+      runTimer(ex.timeSec, () => { isSwitchingSide ? sfxTick() : sfxFinish(); nextStep(); });
       sfxStart();
     } else {
       // 回数計測種目：フッターに常に押せる「完了して次へ」ボタンを固定表示
