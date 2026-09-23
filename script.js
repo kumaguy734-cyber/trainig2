@@ -503,6 +503,32 @@ function recordSession(completed) {
   });
 }
 
+function getMenuProgress(step, menu) {
+  // Returns how many exercises are fully finished, and which one is "current" (in progress or up next).
+  if (step.kind === 'done') return { doneCount: menu.exercises.length, currentExIdx: -1 };
+  if (step.kind === 'exercise') return { doneCount: step.exIdx, currentExIdx: step.exIdx };
+  if (step.isExerciseBreak) {
+    const nextIdx = step.exIdx + 1;
+    return { doneCount: nextIdx, currentExIdx: nextIdx < menu.exercises.length ? nextIdx : -1 };
+  }
+  return { doneCount: step.exIdx, currentExIdx: step.exIdx }; // rest between sets of the same exercise
+}
+
+function renderWorkoutSteps() {
+  const menu = workout.menu;
+  const step = workout.steps[workout.idx];
+  if (!menu || !step) return;
+  const { doneCount, currentExIdx } = getMenuProgress(step, menu);
+
+  $('workoutSteps').innerHTML = menu.exercises.map((ex, i) => {
+    let cls = 'is-upcoming';
+    let content = i + 1;
+    if (i < doneCount) { cls = 'is-done'; content = '✓'; }
+    else if (i === currentExIdx) { cls = 'is-current'; content = ex.icon; }
+    return `<div class="wk-step-dot"><div class="wk-step-circle ${cls}" title="${ex.name}">${content}</div></div>`;
+  }).join('');
+}
+
 function updateProgressBar() {
   const step = workout.steps[workout.idx];
   const doneCount = workout.steps.slice(0, workout.idx).filter((s) => s.kind === 'exercise').length;
@@ -524,6 +550,7 @@ function renderStep() {
   const footer = $('workoutFooter');
   footer.innerHTML = '';
   updateProgressBar();
+  renderWorkoutSteps();
 
   if (step.kind === 'exercise') {
     const ex = step.ex;
