@@ -1,1 +1,138 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>CORE&RUN | 体幹・筋トレメニュー</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
+<div class="app">
+
+  <!-- ===== HEADER ===== -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark">C/R</span>
+      <div class="brand-text">
+        <p class="brand-name">CORE &amp; RUN</p>
+        <p class="brand-sub">体幹・ランニング強化トレーニング</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="表示モード切替">
+      <button class="tab-btn is-active" data-tab="library" role="tab" aria-selected="true">種目図鑑</button>
+      <button class="tab-btn" data-tab="builder" role="tab" aria-selected="false">メニュー提案</button>
+    </nav>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ===== SCREEN 1: 種目図鑑 ===== -->
+    <section id="screen-library" class="screen is-active" aria-label="種目図鑑">
+
+      <div class="filter-bar">
+        <input id="searchInput" class="search-input" type="search" placeholder="種目名で検索" aria-label="種目名で検索">
+        <div class="chip-row" id="categoryChips">
+          <button class="chip is-active" data-cat="all">すべて</button>
+          <button class="chip" data-cat="腹筋">腹筋</button>
+          <button class="chip" data-cat="体幹安定">体幹安定</button>
+          <button class="chip" data-cat="股関節・臀部">股関節・臀部</button>
+          <button class="chip" data-cat="下半身">下半身</button>
+          <button class="chip" data-cat="背部">背部</button>
+        </div>
+        <div class="chip-row">
+          <button class="chip toggle" id="starChip" data-toggle="star">⭐ 重点種目のみ</button>
+          <button class="chip toggle" id="timeChip" data-toggle="time">⏱ 時間計測種目のみ</button>
+        </div>
+      </div>
+
+      <p class="result-count" id="resultCount"></p>
+      <div class="card-grid" id="exerciseGrid"></div>
+      <p class="empty-state" id="libraryEmpty" hidden>条件に合う種目が見つかりません。フィルターを変更してください。</p>
+    </section>
+
+    <!-- ===== SCREEN 2: メニュー提案（入力） ===== -->
+    <section id="screen-builder" class="screen" aria-label="パーソナライズ診断">
+
+      <div class="builder-step">
+        <p class="step-label">STEP 1 — 鍛えたいテーマ</p>
+        <div class="option-grid theme-grid" id="themeGrid"></div>
+      </div>
+
+      <div class="builder-step">
+        <p class="step-label">STEP 2 — トレーニング時間</p>
+        <div class="option-grid duration-grid" id="durationGrid"></div>
+      </div>
+
+      <div class="builder-step">
+        <p class="step-label">STEP 3 — 強度レベル</p>
+        <div class="option-grid level-grid" id="levelGrid"></div>
+      </div>
+
+      <button class="primary-btn build-btn" id="generateBtn" disabled>メニューを作成する</button>
+    </section>
+
+    <!-- ===== SCREEN 3: 提案結果 ===== -->
+    <section id="screen-result" class="screen" aria-label="提案されたメニュー">
+      <button class="text-btn back-btn" id="backToBuilder">← 条件を変更する</button>
+
+      <div class="result-head">
+        <p class="result-theme" id="resultTheme"></p>
+        <h2 class="result-title" id="resultTitle"></h2>
+        <p class="result-desc" id="resultDesc"></p>
+        <div class="result-meta">
+          <span id="resultTime"></span>
+          <span id="resultCountMeta"></span>
+        </div>
+      </div>
+
+      <ol class="menu-list" id="menuList"></ol>
+
+      <button class="primary-btn start-btn" id="startWorkoutBtn">このメニューを開始する（タイマーモードへ）</button>
+    </section>
+
+  </main>
+
+  <!-- ===== 種目詳細モーダル ===== -->
+  <div class="modal-backdrop" id="detailModal" hidden>
+    <div class="modal-sheet" role="dialog" aria-modal="true" aria-labelledby="detailName">
+      <button class="modal-close" id="closeDetail" aria-label="閉じる">×</button>
+      <p class="modal-star" id="detailStar" hidden>⭐ 重点種目</p>
+      <h3 class="modal-name" id="detailName"></h3>
+      <p class="modal-spec" id="detailSpec"></p>
+      <div class="modal-tags" id="detailTags"></div>
+      <p class="modal-section-label">フォーム・やり方</p>
+      <p class="modal-form" id="detailForm"></p>
+    </div>
+  </div>
+
+  <!-- ===== ワークアウト実行モード ===== -->
+  <div class="workout-overlay" id="workoutOverlay" hidden>
+    <div class="workout-screen">
+
+      <div class="workout-top">
+        <button class="workout-exit" id="exitWorkout" aria-label="終了">×</button>
+        <p class="workout-progress" id="workoutProgress"></p>
+        <button class="sound-toggle" id="soundToggle" aria-pressed="true">🔊</button>
+      </div>
+
+      <div class="workout-track" id="workoutTrack">
+        <div class="workout-bar" id="workoutBar"></div>
+      </div>
+
+      <div class="workout-body" id="workoutBody">
+        <!-- phase: exercise / rest / done rendered here -->
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
