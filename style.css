@@ -304,6 +304,17 @@ input { font-family: inherit; }
 /* =========================================================
    History / analysis screen
    ========================================================= */
+.storage-warning {
+  padding: 13px 14px;
+  border-radius: var(--radius-m);
+  background: rgba(255,106,69,0.14);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
 .stat-row { display: flex; gap: 8px; margin-bottom: 18px; }
 .stat-card {
   flex: 1;

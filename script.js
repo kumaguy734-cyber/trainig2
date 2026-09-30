@@ -323,6 +323,17 @@ $('soundToggle').addEventListener('click', () => {
 
 const HISTORY_KEY = 'coreRunHistory';
 
+const STORAGE_OK = (() => {
+  try {
+    const testKey = '__coreRunStorageTest__';
+    localStorage.setItem(testKey, '1');
+    localStorage.removeItem(testKey);
+    return true;
+  } catch (e) {
+    return false; // private browsing, disabled storage, blocked cookies, etc.
+  }
+})();
+
 function loadHistory() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
@@ -335,16 +346,19 @@ function loadHistory() {
 function saveHistory(list) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(-300)));
-  } catch (e) { /* storage unavailable — ignore */ }
+  } catch (e) { /* storage unavailable — surfaced via STORAGE_OK banner instead */ }
 }
 
-function addHistoryRecord(record) {
+function upsertHistoryRecord(record) {
   const list = loadHistory();
-  list.push(record);
+  const idx = list.findIndex((r) => r.id === record.id);
+  if (idx >= 0) list[idx] = record; else list.push(record);
   saveHistory(list);
 }
 
 function renderHistoryView() {
+  $('storageWarning').hidden = STORAGE_OK;
+
   const list = loadHistory().sort((a, b) => new Date(b.date) - new Date(a.date));
 
   $('historyEmpty').hidden = list.length !== 0;
@@ -436,7 +450,7 @@ $('clearHistoryBtn').addEventListener('click', () => {
    ワークアウト実行モード
    ========================================================= */
 
-const workout = { steps: [], idx: 0, intervalId: null, menu: null, startTime: 0 };
+const workout = { steps: [], idx: 0, intervalId: null, menu: null, startTime: 0, sessionId: null };
 
 function buildSteps(menu) {
   const steps = [];
@@ -467,6 +481,7 @@ $('startWorkoutBtn').addEventListener('click', () => {
   workout.idx = 0;
   workout.menu = state.currentMenu;
   workout.startTime = Date.now();
+  workout.sessionId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   $('workoutOverlay').hidden = false;
   renderStep();
 });
@@ -474,9 +489,9 @@ $('startWorkoutBtn').addEventListener('click', () => {
 $('exitWorkout').addEventListener('click', () => {
   const step = workout.steps[workout.idx];
   if (step && step.kind !== 'done' && workout.menu) {
-    const ok = window.confirm('トレーニングを終了しますか？ここまでの記録を保存します。');
+    const ok = window.confirm('トレーニングを終了しますか？ここまでの内容は記録に保存されています。');
     if (!ok) return;
-    recordSession(false);
+    persistProgress(false);
   }
   stopWorkout();
 });
@@ -486,16 +501,19 @@ function stopWorkout() {
   $('workoutOverlay').hidden = true;
 }
 
-function recordSession(completed) {
+function persistProgress(completed) {
+  // Saves a checkpoint every time the workout screen changes, keyed by sessionId,
+  // so progress survives an unexpected tab close, refresh, or backgrounding —
+  // not just a clean finish or an explicit exit.
   const menu = workout.menu;
-  if (!menu) return;
+  if (!menu || !workout.sessionId) return;
   const step = workout.steps[workout.idx];
   const totalEx = menu.exercises.length;
   const exercisesDone = completed ? totalEx : Math.min(totalEx, (step && typeof step.exIdx === 'number') ? step.exIdx : 0);
   const elapsedMin = Math.max(0.1, (Date.now() - workout.startTime) / 60000);
 
-  addHistoryRecord({
-    id: Date.now(),
+  upsertHistoryRecord({
+    id: workout.sessionId,
     date: new Date().toISOString(),
     themeKey: menu.theme.key,
     themeTitle: menu.theme.title,
@@ -614,7 +632,6 @@ function renderStep() {
     $('skipRestBtn').addEventListener('click', () => { clearInterval(workout.intervalId); nextStep(); });
     runTimer(step.restSec, () => { sfxStart(); nextStep(); });
   } else {
-    recordSession(true);
     body.innerHTML = `
       <div class="wk-done-emoji">🎉</div>
       <p class="wk-done-title">お疲れ様でした！</p>
@@ -624,12 +641,19 @@ function renderStep() {
     sfxComplete();
     $('finishBtn').addEventListener('click', stopWorkout);
   }
+
+  persistProgress(step.kind === 'done');
 }
 
 function nextStep() {
   workout.idx += 1;
   renderStep();
 }
+
+window.addEventListener('pagehide', () => {
+  const step = workout.steps[workout.idx];
+  if (workout.sessionId && step && step.kind !== 'done') persistProgress(false);
+});
 
 function runTimer(totalSec, onDone) {
   const circumference = 2 * Math.PI * 100;
