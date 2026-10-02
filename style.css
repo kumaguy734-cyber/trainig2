@@ -315,6 +315,25 @@ input { font-family: inherit; }
   margin-bottom: 16px;
 }
 
+.cloud-status {
+  padding: 11px 14px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+.cloud-status.is-ok {
+  background: rgba(47,217,189,0.12);
+  border-color: var(--accent-2);
+  color: var(--text);
+}
+.cloud-status.is-error {
+  background: rgba(255,106,69,0.14);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .stat-row { display: flex; gap: 8px; margin-bottom: 18px; }
 .stat-card {
   flex: 1;

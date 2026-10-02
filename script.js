@@ -169,7 +169,7 @@ document.querySelectorAll('.tab-btn').forEach((tab) => {
     tab.classList.add('is-active');
     tab.setAttribute('aria-selected', 'true');
     showScreen(TAB_SCREENS[tab.dataset.tab]);
-    if (tab.dataset.tab === 'history') renderHistoryView();
+    if (tab.dataset.tab === 'history') syncFromCloudAndRender();
   });
 });
 
@@ -354,10 +354,89 @@ function upsertHistoryRecord(record) {
   const idx = list.findIndex((r) => r.id === record.id);
   if (idx >= 0) list[idx] = record; else list.push(record);
   saveHistory(list);
+  cloudSave(record); // ローカル保存は必ず先に完了させ、クラウド送信は失敗してもローカルの記録は残る
+}
+
+/* =========================================================
+   クラウド同期（Google Apps Script 経由でスプレッドシートに保存）
+   ========================================================= */
+
+// gas-code.gs をデプロイして発行された「.../exec」で終わるURLをここに貼り付けてください。
+// 空のままなら、これまで通り端末内（localStorage）だけに保存されます。
+const CLOUD_SYNC_URL = ''; // 例: 'https://script.google.com/macros/s/AKfycb.../exec'
+
+const CLOUD_SYNC_ENABLED = !!CLOUD_SYNC_URL;
+let lastCloudSyncOk = true;
+
+function updateCloudStatusBanner() {
+  const el = $('cloudStatus');
+  if (!el) return;
+  if (!CLOUD_SYNC_ENABLED) { el.hidden = true; return; }
+  el.hidden = false;
+  el.className = `cloud-status ${lastCloudSyncOk ? 'is-ok' : 'is-error'}`;
+  el.textContent = lastCloudSyncOk
+    ? '☁️ クラウド同期：有効（Googleスプレッドシートと同期しています）'
+    : '☁️ クラウド同期に失敗しました。URL・公開設定・通信環境を確認してください（この端末内の記録は保存されています）';
+}
+
+async function cloudSave(record) {
+  if (!CLOUD_SYNC_ENABLED) return;
+  try {
+    const res = await fetch(CLOUD_SYNC_URL, {
+      method: 'POST',
+      // text/plain にすることでCORSのプリフライト(OPTIONS)を避け、GASに直接届くようにする
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(record),
+    });
+    const text = await res.text();
+    JSON.parse(text); // GASがHTML（ログイン画面やエラーページ）を返した場合はここで例外になる
+    lastCloudSyncOk = true;
+  } catch (e) {
+    lastCloudSyncOk = false;
+    console.warn('クラウド同期に失敗しました（ローカルには保存されています）:', e);
+  }
+  updateCloudStatusBanner();
+}
+
+async function cloudFetchAll() {
+  if (!CLOUD_SYNC_ENABLED) return null;
+  try {
+    const res = await fetch(CLOUD_SYNC_URL, { method: 'GET' });
+    const text = await res.text();
+    const data = JSON.parse(text); // 同上：HTMLが返るとここで失敗する
+    lastCloudSyncOk = true;
+    updateCloudStatusBanner();
+    return Array.isArray(data) ? data : null;
+  } catch (e) {
+    lastCloudSyncOk = false;
+    updateCloudStatusBanner();
+    console.warn('クラウドからの取得に失敗しました:', e);
+    return null;
+  }
+}
+
+function mergeHistoryLists(localList, cloudList) {
+  const map = new Map();
+  [...localList, ...cloudList].forEach((r) => {
+    const existing = map.get(r.id);
+    if (!existing || new Date(r.date) > new Date(existing.date)) map.set(r.id, r);
+  });
+  return [...map.values()];
+}
+
+async function syncFromCloudAndRender() {
+  if (CLOUD_SYNC_ENABLED) {
+    const cloudList = await cloudFetchAll();
+    if (cloudList) {
+      saveHistory(mergeHistoryLists(loadHistory(), cloudList));
+    }
+  }
+  renderHistoryView();
 }
 
 function renderHistoryView() {
   $('storageWarning').hidden = STORAGE_OK;
+  updateCloudStatusBanner();
 
   const list = loadHistory().sort((a, b) => new Date(b.date) - new Date(a.date));
 
