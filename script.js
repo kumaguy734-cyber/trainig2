@@ -363,7 +363,7 @@ function upsertHistoryRecord(record) {
 
 // gas-code.gs をデプロイして発行された「.../exec」で終わるURLをここに貼り付けてください。
 // 空のままなら、これまで通り端末内（localStorage）だけに保存されます。
-const CLOUD_SYNC_URL = ''; // 例: 'https://script.google.com/macros/s/AKfycb.../exec'
+const CLOUD_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwUYNFnwL4QW-HNAy5MxoUkpr8tnK0cw9rD_gQaFoMH576MkLMTK2xD1EmD2OUo5Ywj/exec'; // 例: 'https://script.google.com/macros/s/AKfycb.../exec'
 
 const CLOUD_SYNC_ENABLED = !!CLOUD_SYNC_URL;
 let lastCloudSyncOk = true;
